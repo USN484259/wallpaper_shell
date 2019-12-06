@@ -24,7 +24,8 @@ size_t Repository::put(const string& str) {
 	size_t count = 0;
 	for (auto it = p.begin(); it != p.end(); ++it) {
 		Path file = *it;
-		if (file.type() == Path::FILE) {
+		if (file.type() == Path::FILE){
+
 			string ext = file.extension();
 			if (ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "bmp") {
 				pool.push_back(file);
@@ -32,6 +33,8 @@ size_t Repository::put(const string& str) {
 			}
 		}
 	}
+
+
 	return count;
 }
 
