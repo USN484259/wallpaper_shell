@@ -15,31 +15,32 @@ using Path = USNLIB::filesystem::path;
 
 
 
-Wallpaper::Wallpaper(const string& cmd) : timer(CreateWaitableTimer(NULL, TRUE, NULL)), interval(30*1000),paused(false),power_policy(true), maximize_policy(true), explorer_policy(true) {
+Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, placeholders::_1)), timer(CreateWaitableTimer(NULL, TRUE, NULL)), interval(30 * 1000), paused(false), power_policy(true), maximize_policy(true), explorer_policy(true) {
 	CoInitialize(NULL);
-	ui.menu_handler(bind(&Wallpaper::menu_event, this, placeholders::_1));
-	ui.menu_item(4, "Pause on battery power");
-	ui.menu_item(5, "Pause on maximaized");
-	ui.menu_item(6, "Pause on folder opened");
+	ui.menu_item(menu_cur, "");
+	ui.menu_item(menu_prev, "");
 	ui.menu_item();
-	ui.menu_item(3, "Pause manually");
+	ui.menu_item(menu_power, "Pause on battery power");
+	ui.menu_item(menu_maxi, "Pause on maximaized");
+	ui.menu_item(menu_exp, "Pause on folder opened");
 	ui.menu_item();
-	ui.menu_item(2, "Previous wallpaper");
-	ui.menu_item(1, "Next wallpaper");
+	ui.menu_item(menu_paused, "Pause manually");
+	ui.menu_item();
+	ui.menu_item(menu_next, "Next wallpaper");
 	ui.menu_item();
 
 	parse(cmd);
 
-	ui.menu_checked(3, paused);
-	ui.menu_checked(4, power_policy);
-	ui.menu_checked(5, maximize_policy);
-	ui.menu_checked(6, explorer_policy);
+	ui.menu_checked(menu_paused, paused);
+	ui.menu_checked(menu_power, power_policy);
+	ui.menu_checked(menu_maxi, maximize_policy);
+	ui.menu_checked(menu_exp, explorer_policy);
+
+	ui.menu_string(menu_cur, "current: (none)");
+	ui.menu_string(menu_prev, "previous: (none)");
 
 	if (!paused) {
-		LARGE_INTEGER due;
-		due.QuadPart = -100000000LL;
-		if (!SetWaitableTimer(timer, &due, interval, on_timer, this, FALSE))
-			throw runtime_error("Wallpaper::SetWaitableTimer");
+		set_timer();
 	}
 
 	ui.show();
@@ -47,7 +48,7 @@ Wallpaper::Wallpaper(const string& cmd) : timer(CreateWaitableTimer(NULL, TRUE, 
 }
 
 Wallpaper::~Wallpaper(void) {
-	CancelWaitableTimer(timer);
+	cancel_timer();
 	CoUninitialize();
 	CloseHandle(timer);
 }
@@ -117,45 +118,77 @@ void Wallpaper::parse(const string& cmd) {
 
 }
 
+bool Wallpaper::set_timer(void) {
+	LARGE_INTEGER due;
+	due.QuadPart = -100000000LL;
+	if (!SetWaitableTimer(timer, &due, interval, on_timer, this, FALSE))
+		return false;
+	return true;
+
+}
+
+bool Wallpaper::cancel_timer(void) {
+	return CancelWaitableTimer(timer) ? true : false;
+}
 
 void Wallpaper::menu_event(unsigned id) {
 	switch (id) {
-	case 1:	//Next
+	case menu_next:
 		next(true);
 		break;
-	case 2:	//prev
-		prev();
+	case menu_prev:
+
 		break;
-	case 3:	//Pause
+	case menu_paused:
 	{
 		if (paused) {
-			LARGE_INTEGER due;
-			due.QuadPart = -100000000LL;
-			if (SetWaitableTimer(timer, &due, interval, on_timer, this, FALSE))
+			if (set_timer())
 				paused = false;
 		}
 		else {
-			if (CancelWaitableTimer(timer))
+			if (cancel_timer())
 				paused = true;
 		}
-		ui.menu_checked(3, paused);
+		ui.menu_checked(menu_paused, paused);
 		break;
 	}
 
-	case 4:	//power
-		ui.menu_checked(4,power_policy = !power_policy);
+	case menu_power:
+		ui.menu_checked(menu_power,power_policy = !power_policy);
 		break;
-	case 5:	//maximize
-		ui.menu_checked(5,maximize_policy = !maximize_policy);
+	case menu_maxi:
+		ui.menu_checked(menu_maxi,maximize_policy = !maximize_policy);
 		break;
-	case 6:	//explorer
-		ui.menu_checked(6,explorer_policy = !explorer_policy);
+	case menu_exp:	//explorer
+		ui.menu_checked(menu_exp,explorer_policy = !explorer_policy);
 		break;
 
+	case shell_ui::session_locked:
+		cancel_timer();
+		break;
+	case shell_ui::session_unlocked:
+		if (!paused)
+			set_timer();
+		break;
 	}
 }
 
 bool Wallpaper::changeable(void) const {
+	/*
+	HDESK desk = OpenInputDesktop(0, FALSE, GENERIC_READ);
+	if (!desk)
+		return false;
+
+	DWORD len;
+	USEROBJECTFLAGS info;
+	GetUserObjectInformation(desk, UOI_FLAGS, &info, sizeof(USEROBJECTFLAGS), &len);
+	CloseDesktop(desk);
+
+	if (info.dwFlags & WSF_VISIBLE)
+		;
+	else
+		return false;
+		*/
 
 	if (power_policy) {
 		SYSTEM_POWER_STATUS ps;
@@ -235,26 +268,31 @@ bool Wallpaper::next(bool force) {
 		;
 	else
 		return false;
-	Path old(previous);
-	previous = current;
-	current = repo.get();
-	if (set(current)) {
-		ui.title(current.filename());
+	//Path old(previous);
+	//previous = current;
+	string old_title("previous: ");
+	old_title.append(ui.title());
+	const Path& p = repo.get();
+	if (set(p)) {
+		ui.title(p.filename());
+		ui.menu_string(menu_cur, string("current: ").append(p.filename()).c_str());
+		ui.menu_string(menu_prev, old_title.c_str());
+
 		return true;
 	}
-	previous = old;
+	//previous = old;
 	return false;
 }
 
-bool Wallpaper::prev(void) {
-	if (previous.type() == Path::UNKNOWN)
-		return false;
-
-	if (set(previous)) {
-		ui.title(previous.filename());
-		swap(previous, current);
-		return true;
-	}
-	return false;
-
-}
+//bool Wallpaper::prev(void) {
+//	if (previous.type() == Path::UNKNOWN)
+//		return false;
+//
+//	if (set(previous)) {
+//		ui.title(previous.filename());
+//		swap(previous, current);
+//		return true;
+//	}
+//	return false;
+//
+//}

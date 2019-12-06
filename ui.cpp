@@ -1,5 +1,7 @@
 #include "ui.h"
 #include <windowsx.h>
+#include <WtsApi32.h>
+#pragma comment(lib,"Wtsapi32.lib")
 #include <stdexcept>
 #include "resource.h"
 using namespace std;
@@ -50,7 +52,9 @@ LRESULT shell_ui::msg_proc(UINT msg, WPARAM wParam, LPARAM lParam) {
 	switch (msg) {
 	case WM_CREATE:
 	{
-		return place_icon() ? 0 : -1;
+		if (place_icon() && WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION))
+			return 0;
+		return -1;
 
 	}
 	case WM_CLOSE:
@@ -63,11 +67,21 @@ LRESULT shell_ui::msg_proc(UINT msg, WPARAM wParam, LPARAM lParam) {
 
 		Shell_NotifyIcon(NIM_DELETE, &icon);
 
+		WTSUnRegisterSessionNotification(hwnd);
+
 		break;
 	}
+	case WM_WTSSESSION_CHANGE:
+		switch (wParam) {
+		case WTS_SESSION_LOCK:
+		case WTS_SESSION_UNLOCK:
+			handler(wParam | 0x3FF0);
+		}
+		break;
 	case WM_USER + 259:
 	{
 		switch (LOWORD(lParam)) {
+		case WM_LBUTTONUP:
 		case WM_CONTEXTMENU:
 
 			SetForegroundWindow(hwnd);
@@ -105,7 +119,7 @@ bool shell_ui::msg_pump(MSG& msg) {
 }
 
 
-shell_ui::shell_ui(void) : gui(typeid(shell_ui).name()), menu(CreatePopupMenu()), TaskbarCreated(RegisterWindowMessage(TEXT("TaskbarCreated"))), handler([](unsigned) {}) {
+shell_ui::shell_ui(handler_type h) : gui(typeid(shell_ui).name()), menu(CreatePopupMenu()), TaskbarCreated(RegisterWindowMessage(TEXT("TaskbarCreated"))), handler(h) {
 	style = 0;
 	if (!menu)
 		throw runtime_error("shell_ui CreateMenu");
@@ -126,18 +140,18 @@ shell_ui::~shell_ui(void) {
 	DestroyMenu(menu);
 }
 
-void shell_ui::menu_handler(handler_type h) {
-	handler = h;
-}
-
 void shell_ui::menu_item(unsigned id, const char* str) {
-	if (id == menu_exit_id)
-		throw runtime_error("shell_ui::menu_item id conflict");
+	//if (id == menu_exit_id)
+	//	throw runtime_error("shell_ui::menu_item id conflict");
 	InsertMenu(menu, menu_exit_id, id ? 0 : MF_SEPARATOR, id, str);
 }
 
 void shell_ui::menu_checked(unsigned id, bool state) {
 	CheckMenuItem(menu, id, state ? MF_CHECKED : 0);
+}
+
+void shell_ui::menu_string(unsigned id, const char* str) {
+	ModifyMenu(menu, id, MF_DISABLED, id, str);
 }
 
 void shell_ui::title(const string& str) {
