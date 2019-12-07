@@ -7,7 +7,7 @@ using Path = USNLIB::filesystem::path;
 
 Repository::Repository(void) : rng(time(nullptr)) {}
 
-size_t Repository::put(const string& str) {
+size_t Repository::put(const string& str,bool recursive) {
 	Path p(str);
 	//switch (p.type()) {
 	//case Path::FILE:
@@ -22,7 +22,7 @@ size_t Repository::put(const string& str) {
 	////iterate through DIR
 
 	size_t count = 0;
-	for (auto it = p.begin(); it != p.end(); ++it) {
+	for (auto it = p.begin(recursive); it != p.end(); ++it) {
 		Path file = *it;
 		if (file.type() == Path::FILE){
 

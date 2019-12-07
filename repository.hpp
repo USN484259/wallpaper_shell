@@ -12,7 +12,7 @@ public:
 	Repository(void);
 	Repository(const Repository&) = delete;
 	Repository& operator=(const Repository&) = delete;
-	size_t put(const std::string&);
+	size_t put(const std::string&,bool recursive = false);
 	const USNLIB::filesystem::path& get(void) const;
 	size_t size(void) const;
 

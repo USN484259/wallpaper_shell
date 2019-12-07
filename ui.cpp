@@ -132,7 +132,7 @@ shell_ui::shell_ui(handler_type h) : gui(typeid(shell_ui).name()), menu(CreatePo
 	if (!AppendMenu(menu, 0, menu_exit_id, "Exit"))
 		throw runtime_error("shell_ui AppendMenu");
 
-	tit = "wallpaper_engine";
+	tit = "wallpaper_shell";
 
 }
 

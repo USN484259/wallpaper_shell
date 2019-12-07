@@ -17,6 +17,8 @@ using Path = USNLIB::filesystem::path;
 
 Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, placeholders::_1)), timer(CreateWaitableTimer(NULL, TRUE, NULL)), interval(30 * 1000), paused(false), power_policy(true), maximize_policy(true), explorer_policy(true) {
 	CoInitialize(NULL);
+	ui.menu_item(menu_total, "");
+	ui.menu_item();
 	ui.menu_item(menu_cur, "");
 	ui.menu_item(menu_prev, "");
 	ui.menu_item();
@@ -36,6 +38,9 @@ Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, 
 	ui.menu_checked(menu_maxi, maximize_policy);
 	ui.menu_checked(menu_exp, explorer_policy);
 
+	stringstream ss;
+	ss << "Total " << repo.size() << " images";
+	ui.menu_string(menu_total, ss.str().c_str());
 	ui.menu_string(menu_cur, "current: (none)");
 	ui.menu_string(menu_prev, "previous: (none)");
 
@@ -63,6 +68,7 @@ void Wallpaper::parse(const string& cmd) {
 	stringstream ss;
 	ss.str(cmd);
 	string str;
+	bool recursive = false;
 	while (ss.good()) {
 
 		if (!str.empty() && str.front() == '\"') {
@@ -99,6 +105,12 @@ void Wallpaper::parse(const string& cmd) {
 			case 'M':
 				maximize_policy = true;
 				break;
+			case 'R':
+				recursive = true;
+				break;
+			case 'r':
+				recursive = false;
+				break;
 			case 'i':
 			case 'I':
 				interval = 1000 * strtoul(str.substr(2).c_str(), nullptr, 10);
@@ -108,7 +120,7 @@ void Wallpaper::parse(const string& cmd) {
 			}
 		}
 		else
-			repo.put(str);
+			repo.put(str, recursive);
 
 		str.clear();
 
