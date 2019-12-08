@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <fstream>
 #include "repository.hpp"
 #include "ui.h"
 
@@ -9,6 +10,7 @@ class Wallpaper {
 
 	HANDLE timer;
 	LONG interval;
+	mutable std::ofstream log_file;
 
 	bool paused;
 	bool power_policy;
@@ -18,6 +20,9 @@ class Wallpaper {
 	enum : unsigned { menu_total = 0x10,  menu_cur = 0x12, menu_prev = 0x13, menu_next = 1, menu_paused = 4, menu_power = 5, menu_maxi = 6, menu_exp = 7 };
 
 private:
+	bool log(void) const;
+	void log(const std::string&) const;
+
 	void parse(const std::string&);
 	bool changeable(void) const;
 	bool set_timer(void);
