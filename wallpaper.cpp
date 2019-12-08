@@ -10,8 +10,8 @@
 #include <iomanip>
 
 #include <Windows.h>
-#include <wininet.h>
-#include <shlobj.h>
+//#include <wininet.h>
+//#include <shlobj.h>
 
 using namespace std;
 using Path = USNLIB::filesystem::path;
@@ -19,7 +19,7 @@ using Path = USNLIB::filesystem::path;
 
 
 Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, placeholders::_1)), timer(CreateWaitableTimer(NULL, TRUE, NULL)), interval(30 * 1000), paused(false), power_policy(true), maximize_policy(true), explorer_policy(true) {
-	CoInitialize(NULL);
+	//CoInitialize(NULL);
 	ui.menu_item(menu_total, "");
 	ui.menu_item();
 	ui.menu_item(menu_cur, "");
@@ -65,7 +65,7 @@ Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, 
 
 Wallpaper::~Wallpaper(void) {
 	cancel_timer();
-	CoUninitialize();
+	//CoUninitialize();
 	CloseHandle(timer);
 	log("-------- ~wallpaper_shell --------");
 }
@@ -313,7 +313,16 @@ bool Wallpaper::changeable(void) const {
 	return false;
 }
 
+bool Wallpaper::set(const string& str) {
+	if (!SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, (PVOID)str.c_str(), 0)) {
+		log("set wallpaper failed");
+		return false;
+	}
+	return true;
 
+}
+
+/*
 bool Wallpaper::set(const string& str) {
 	bool suc = false;
 	IActiveDesktop *pIAD = nullptr;
@@ -358,6 +367,7 @@ bool Wallpaper::set(const string& str) {
 	}
 	return suc;
 }
+*/
 
 bool Wallpaper::next(bool force) {
 	if (force || changeable())

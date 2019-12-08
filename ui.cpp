@@ -133,7 +133,31 @@ shell_ui::shell_ui(handler_type h) : gui(typeid(shell_ui).name()), menu(CreatePo
 		throw runtime_error("shell_ui AppendMenu");
 
 	tit = "wallpaper_shell";
+	/*
+	HWND container = NULL;
+	Sleep(3000);
+	do {
+		container = FindWindowEx(NULL, container, "WorkerW", NULL);
+		if (!container)
+			break;
+		HWND shell = FindWindowEx(container,NULL,"SHELLDLL_DefView", NULL);
+		if (!shell)
+			continue;
+		HWND background = FindWindowEx(shell, NULL, "SysListView32", "FolderView");
+		if (!background)
+			background = shell;
+		HDC dc = GetDC(background);
+		if (!dc)
+			break;
+		HICON icon = LoadIcon(NULL, MAKEINTRESOURCE(MAIN_ICON));
+		DrawIcon(dc, 400, 400, icon);
+		RedrawWindow(background, NULL, NULL, RDW_NOERASE | RDW_INVALIDATE | RDW_UPDATENOW);
 
+		ReleaseDC(background,dc);
+		break;
+	} while (true);
+
+	*/
 }
 
 shell_ui::~shell_ui(void) {
