@@ -13,10 +13,17 @@
 //#include <wininet.h>
 //#include <shlobj.h>
 
+#include <dwmapi.h>
+#pragma comment(lib,"dwmapi.lib")
+
 using namespace std;
 using Path = USNLIB::filesystem::path;
 
-
+//#ifdef _DEBUG
+//#define verbose_log(s) log(s)
+//#else
+//#define verbose_log(s)
+//#endif
 
 Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, placeholders::_1)), timer(CreateWaitableTimer(NULL, TRUE, NULL)), interval(30 * 1000), paused(false), power_policy(true), maximize_policy(true), explorer_policy(true) {
 	//CoInitialize(NULL);
@@ -59,12 +66,14 @@ Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, 
 		set_timer();
 	}
 
-	ui.show();
+	//event_hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND, NULL, on_event, 0, 0, 0);
 
+	ui.show();
 }
 
 Wallpaper::~Wallpaper(void) {
 	cancel_timer();
+	//UnhookWinEvent(event_hook);
 	//CoUninitialize();
 	CloseHandle(timer);
 	log("-------- ~wallpaper_shell --------");
@@ -89,6 +98,86 @@ void CALLBACK Wallpaper::on_timer(LPVOID arg, DWORD, DWORD) {
 	wp->next();
 
 }
+
+/*
+void CALLBACK Wallpaper::on_event(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG, LONG, DWORD, DWORD) {
+	static ofstream event_log(".\\events.log",ios::app);
+	stringstream ss;
+	if (!hwnd)
+		return;
+	//HWND desktop = GetDesktopWindow();
+	//if (GetWindow(hwnd, GW_OWNER) != desktop)
+	//	return;
+
+	switch (event) {
+	case EVENT_SYSTEM_FOREGROUND:
+		ss << "EVENT_SYSTEM_FOREGROUND";
+		break;
+	case EVENT_SYSTEM_MINIMIZEEND:
+		ss << "EVENT_SYSTEM_MINIMIZEEND";
+		break;
+	case EVENT_SYSTEM_MINIMIZESTART:
+		ss << "EVENT_SYSTEM_MINIMIZESTART";
+		break;
+	case EVENT_SYSTEM_MOVESIZEEND:
+		ss << "EVENT_SYSTEM_MOVESIZEEND";
+		break;
+	case EVENT_SYSTEM_MOVESIZESTART:
+		ss << "EVENT_SYSTEM_MOVESIZESTART";
+		break;
+	case EVENT_SYSTEM_SWITCHEND:
+		ss << "EVENT_SYSTEM_SWITCHEND";
+		break;
+	case EVENT_SYSTEM_CAPTUREEND:
+		ss << "EVENT_SYSTEM_CAPTUREEND";
+		break;
+	case EVENT_SYSTEM_CAPTURESTART:
+		ss << "EVENT_SYSTEM_CAPTURESTART";
+		break;
+
+	//case EVENT_OBJECT_CREATE:
+	//	ss << "EVENT_OBJECT_CREATE";
+	//	break;
+	//case EVENT_OBJECT_DESTROY:
+	//	ss << "EVENT_OBJECT_DESTROY";
+	//	break;
+	//case EVENT_OBJECT_FOCUS:
+	//	ss << "EVENT_OBJECT_FOCUS";
+	//	break;
+	//case EVENT_OBJECT_HIDE:
+	//	ss << "EVENT_OBJECT_HIDE";
+	//	break;
+	//case EVENT_OBJECT_LOCATIONCHANGE:
+	//	ss << "EVENT_OBJECT_LOCATIONCHANGE";
+	//	break;
+	//case EVENT_OBJECT_SHOW:
+	//	ss << "EVENT_OBJECT_SHOW";
+	//	break;
+	//case EVENT_OBJECT_STATECHANGE:
+	//	ss << "EVENT_OBJECT_STATECHANGE";
+	//	break;
+	//case EVENT_OBJECT_VALUECHANGE:
+	//	ss << "EVENT_OBJECT_VALUECHANGE";
+	//	break;
+	//case EVENT_OBJECT_REORDER:
+	//	ss << "EVENT_OBJECT_REORDER";
+	//	break;
+	//case EVENT_OBJECT_PARENTCHANGE:
+	//	ss << "EVENT_OBJECT_PARENTCHANGE";
+	//	break;
+
+	//default:
+	//	return;
+	}
+	ss << '\t' << hex << event << '\t' << hwnd << ' ';
+	char buf[0x100] = { 0 };
+	RECT area = { 0 };
+	GetClassName(hwnd, buf, 0x100);
+	GetWindowRect(hwnd, &area);
+	ss << buf << dec << " [" << area.left << ',' << area.top << "] [" << area.right << ',' << area.bottom << ']' << endl;
+	event_log << ss.str();
+}
+*/
 
 void Wallpaper::parse(const string& cmd) {
 	stringstream ss;
@@ -227,80 +316,126 @@ void Wallpaper::menu_event(unsigned id) {
 	}
 }
 
-bool operator<(const RECT& a, const RECT& b) {
-	if (a.left < b.left || a.top < b.top)
-		return false;
-	if (a.right > b.right || a.bottom > b.bottom)
-		return false;
-	return true;
+bool operator==(const RECT& a, const RECT& b) {
+	return abs(a.left - b.left) + abs(a.top - b.top) + abs(a.right - b.right) + abs(a.bottom - b.bottom) <= 32;
 }
 
+
+struct enum_window_info {
+	bool explorer_policy;
+	stringstream& reason;
+	RECT desktop;
+
+};
+
+static const string folder_class_name("CabinetWClass");
+
+
 bool Wallpaper::changeable(void) const {
-	string reason("Not changeable :");
+	stringstream reason("Not changeable :");
 	do {
 		if (power_policy) {
 			SYSTEM_POWER_STATUS ps;
 			if (!GetSystemPowerStatus(&ps)) {
-				reason += " GetSystemPowerStatus failed";
+				reason << " GetSystemPowerStatus failed";
 				break;
 			}
 			if (ps.ACLineStatus == 0) {
-				reason += " Not AC powered";
+				reason << " Not AC powered";
 				break;
 			}
 		}
-		static const string folder_class("CabinetWClass");
 
 		if (maximize_policy) {
+			enum_window_info info{ explorer_policy ,reason ,0 };
+			GetWindowRect(GetDesktopWindow(), &info.desktop);
+			if (!EnumWindows(on_enum, (LPARAM)&info))
+				break;
+
+			/*
+
 			HWND window = GetDesktopWindow();
 			RECT screen = { 0 };
+			//HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY);
+			//MONITORINFO screen = { sizeof(MONITORINFO),0 };
+			//GetMonitorInfo(monitor, &screen);
+
 			GetWindowRect(window, &screen);
 			window = GetWindow(window, GW_CHILD);
+			//DWORD pid_exp = 0;
 			static const array<string, 3> passed_names = { "Windows.UI.Core.CoreWindow","WorkerW","Progman" };
-			char buf[0x100];
-			while (window) {
+			static const string taskbar_class_name("Shell_TrayWnd");
+			char buf[0x100] = { 0 };
+			for (; window; window = GetWindow(window, GW_HWNDNEXT)) {
+
+
+				
+				//if (taskbar_class_name == buf) {
+				//	GetWindowThreadProcessId(window, &pid_exp);
+				//}
+
+				LONG style = GetWindowLong(window, GWL_STYLE);
+				if (!(style & WS_VISIBLE) || (style & WS_DISABLED)) {
+					continue;
+				}
+
+				if (GetWindowLong(window, GWL_EXSTYLE) & (WS_EX_TOPMOST | WS_EX_NOACTIVATE)) {
+					continue;
+				}
+
+				DWORD clocked = 0;
+				if (S_OK == DwmGetWindowAttribute(window, DWMWA_CLOAKED, &clocked, 4) && clocked) {
+					continue;
+				}
+
+
+				if (style & WS_MINIMIZE) {
+					continue;
+				}
+
 
 				GetClassName(window, buf, 0x100);
-				//log(buf);
-				bool skip = false;
-				for (auto it = passed_names.cbegin(); it != passed_names.cend(); ++it) {
-					if (*it == buf) {
-						skip = true;
-						break;
-					}
 
+				if (style & WS_MAXIMIZE) {
+					reason << " Window maximized";
+					break;
 				}
 
-				if (!skip) {
+				if (passed_names.cend() != find(passed_names.cbegin(), passed_names.cend(), string(buf)))
+					continue;
 
-					WINDOWPLACEMENT placement;
-					if (GetWindowPlacement(window, &placement) && placement.showCmd == SW_MAXIMIZE) {
-						reason += " Window maximized";
-						break;
-					}
-					RECT area = { 0 };
-					if (GetWindowRect(window, &area) && screen < area) {
-						reason += " Window fullscreen";
-						break;
-					}
-					if (explorer_policy && folder_class == buf) {
-						reason += " Found opened folder";
-						break;
-					}
-
+				if (explorer_policy && folder_class_name == buf) {
+					reason << " Found opened folder";
+					break;
 				}
-				window = GetWindow(window, GW_HWNDNEXT);
+
+				//DWORD pid;
+				//GetWindowThreadProcessId(window, &pid);
+				//if (pid == pid_exp) {
+				//	continue;
+				//}
+
+
+
+
+				RECT area = { 0 };
+				if (GetWindowRect(window, &area) && screen == area) {
+					reason << " Window fullscreen";
+					break;
+				}
+
+
 			}
 			if (window) {
-				reason.push_back(':');
-				reason.append(buf);
+				reason << ':' << buf << ' ' << hex << window;
 				break;
 			}
+			*/
 		}
 
 		else if (explorer_policy) {
-			if (FindWindowA(folder_class.c_str(), NULL)) {
-				reason += " Found opened folder";
+			if (FindWindowA(folder_class_name.c_str(), NULL)) {
+				reason << " Found opened folder";
 				break;
 			}
 		}
@@ -309,9 +444,81 @@ bool Wallpaper::changeable(void) const {
 		return true;
 	} while (false);
 
-	log(reason);
+	log(reason.str());
 	return false;
 }
+
+BOOL CALLBACK Wallpaper::on_enum(HWND hwnd, LPARAM lparam) {
+	//const Wallpaper* This = static_cast<const Wallpaper*>((const void*)lparam);
+	enum_window_info& info = *(enum_window_info*)lparam;
+
+	static const array<string, 3> passed_names = { "Windows.UI.Core.CoreWindow","WorkerW","Progman" };
+	static const string taskbar_class_name("Shell_TrayWnd");
+
+
+
+	LONG style = GetWindowLong(hwnd, GWL_STYLE);
+	if (!(style & WS_VISIBLE) || (style & WS_DISABLED)) {
+		return TRUE;
+	}
+
+	if (GetWindowLong(hwnd, GWL_EXSTYLE) & (WS_EX_TOPMOST | WS_EX_NOACTIVATE)) {
+		return TRUE;
+	}
+
+	DWORD clocked = 0;
+	if (S_OK == DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &clocked, 4) && clocked) {
+		return TRUE;
+	}
+
+	if (style & WS_MINIMIZE) {
+		return TRUE;
+	}
+
+	char buf[0x100] = { 0 };
+	GetClassName(hwnd, buf, 0x100);
+
+	do {
+
+		if (style & WS_MAXIMIZE) {
+			info.reason << " Window maximized";
+			break;
+		}
+
+		if (passed_names.cend() != find(passed_names.cbegin(), passed_names.cend(), string(buf)))
+			return TRUE;
+
+		if (info.explorer_policy && folder_class_name == buf) {
+			info.reason << " Found opened folder";
+			break;
+		}
+
+		//DWORD pid;
+		//GetWindowThreadProcessId(window, &pid);
+		//if (pid == pid_exp) {
+		//	continue;
+		//}
+
+
+
+
+		RECT area = { 0 };
+		if (GetWindowRect(hwnd, &area) && info.desktop == area) {
+			info.reason << " Window fullscreen";
+			break;
+		}
+
+
+
+		return TRUE;
+	} while (false);
+
+
+	info.reason << ':' << buf << ' ' << hex << hwnd;
+
+	return FALSE;
+}
+
 
 bool Wallpaper::set(const string& str) {
 	if (!SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, (PVOID)str.c_str(), 0)) {

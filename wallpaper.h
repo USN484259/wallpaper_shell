@@ -12,6 +12,8 @@ class Wallpaper {
 	LONG interval;
 	mutable std::ofstream log_file;
 
+	//HWINEVENTHOOK event_hook;
+
 	bool paused;
 	bool power_policy;
 	bool maximize_policy;
@@ -31,8 +33,13 @@ private:
 	bool next(bool force = false);
 	void menu_event(unsigned);
 
+	//GetMonitorInfoA
 
 	static void CALLBACK on_timer(LPVOID arg, DWORD, DWORD);
+
+	static BOOL CALLBACK on_enum(HWND, LPARAM);
+
+	//static void CALLBACK on_event(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD);
 public:
 	Wallpaper(const std::string&);
 	~Wallpaper(void);
