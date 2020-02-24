@@ -5,7 +5,7 @@
 class shell_ui : public USNLIB::gui {
 public:
 	typedef std::function<void(unsigned)> handler_type;
-	enum :unsigned { session_locked = 0x3FF7, session_unlocked = 0x3FF8 };
+	enum :unsigned { taskbar_created = 0x3FFF, session_locked = 0x3FF7, session_unlocked = 0x3FF8 };
 private:
 	enum : unsigned { menu_exit_id = 0x7FFF };
 
@@ -20,6 +20,8 @@ private:
 protected:
 	LRESULT msg_proc(UINT, WPARAM, LPARAM) override;
 	bool msg_pump(MSG&) override;
+
+
 public:
 	shell_ui(handler_type);
 	~shell_ui(void);

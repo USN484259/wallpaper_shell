@@ -10,10 +10,10 @@ const char* mutex_name = "io.github.USN484259@wallpaper_shell";
 
 
 int WinMain(
-	HINSTANCE hInstance,
+	HINSTANCE,
 	HINSTANCE,
 	LPSTR     lpCmdLine,
-	int       nShowCmd
+	int
 ) {
 	HANDLE hMutex = NULL;
 	try {

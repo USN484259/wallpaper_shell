@@ -36,9 +36,13 @@ bool shell_ui::place_icon(void) {
 	if (!Shell_NotifyIcon(NIM_SETVERSION, &icon))
 		return false;
 
+
 	return true;
 
 }
+
+
+
 
 LRESULT shell_ui::msg_proc(UINT msg, WPARAM wParam, LPARAM lParam) {
 
@@ -46,6 +50,7 @@ LRESULT shell_ui::msg_proc(UINT msg, WPARAM wParam, LPARAM lParam) {
 
 	if (msg == TaskbarCreated) {
 		place_icon();
+		handler(taskbar_created);
 		return 0;
 	}
 
@@ -71,6 +76,7 @@ LRESULT shell_ui::msg_proc(UINT msg, WPARAM wParam, LPARAM lParam) {
 
 		break;
 	}
+
 	case WM_WTSSESSION_CHANGE:
 		switch (wParam) {
 		case WTS_SESSION_LOCK:

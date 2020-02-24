@@ -25,18 +25,19 @@ using Path = USNLIB::filesystem::path;
 //#define verbose_log(s)
 //#endif
 
-Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, placeholders::_1)), timer(CreateWaitableTimer(NULL, TRUE, NULL)), interval(30 * 1000), paused(false), power_policy(true), maximize_policy(true), explorer_policy(true) {
+Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, placeholders::_1)), timer(CreateWaitableTimer(NULL, TRUE, NULL)), interval(60 * 1000), paused(false), power_policy(true), maximize_policy(true), explorer_policy(true) ,it_current(history.cbegin()){
 	//CoInitialize(NULL);
-	ui.menu_item(menu_total, "");
+	ui.menu_item(label_total, "");
 	ui.menu_item();
-	ui.menu_item(menu_cur, "");
-	ui.menu_item(menu_prev, "");
+	ui.menu_item(label_cur, "");
+	ui.menu_item(label_prev, "");
 	ui.menu_item();
 	ui.menu_item(menu_power, "Pause on battery power");
 	ui.menu_item(menu_maxi, "Pause on maximaized");
 	ui.menu_item(menu_exp, "Pause on folder opened");
 	ui.menu_item(menu_paused, "Pause manually");
 	ui.menu_item();
+	ui.menu_item(menu_prev, "Previous wallpaper");
 	ui.menu_item(menu_next, "Next wallpaper");
 	ui.menu_item();
 
@@ -49,9 +50,9 @@ Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, 
 
 	stringstream ss;
 	ss << "Total " << repo.size() << " images";
-	ui.menu_string(menu_total, ss.str().c_str());
-	ui.menu_string(menu_cur, "current: (none)");
-	ui.menu_string(menu_prev, "previous: (none)");
+	ui.menu_string(label_total, ss.str().c_str());
+	ui.menu_string(label_cur, "current: (none)");
+	ui.menu_string(label_prev, "previous: (none)");
 
 	if (log()) {
 		log("-------- wallpaper_shell --------");
@@ -229,8 +230,8 @@ void Wallpaper::parse(const string& cmd) {
 			case 'i':
 			case 'I':
 				interval = 1000 * strtoul(str.substr(2).c_str(), nullptr, 10);
-				if (interval < 5000)
-					interval = 30 * 1000;
+				if (interval < 10000)
+					interval = 60 * 1000;
 				break;
 			case 'l':
 			case 'L':
@@ -274,7 +275,8 @@ void Wallpaper::menu_event(unsigned id) {
 		next(true);
 		break;
 	case menu_prev:
-
+		log("manual prev");
+		prev();
 		break;
 	case menu_paused:
 	{
@@ -313,6 +315,9 @@ void Wallpaper::menu_event(unsigned id) {
 		if (!paused)
 			set_timer();
 		break;
+	//case shell_ui::taskbar_created:
+		//taskbar.update();
+	//	break;
 	}
 }
 
@@ -519,7 +524,7 @@ BOOL CALLBACK Wallpaper::on_enum(HWND hwnd, LPARAM lparam) {
 	return FALSE;
 }
 
-
+/*
 bool Wallpaper::set(const string& str) {
 	if (!SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, (PVOID)str.c_str(), 0)) {
 		log("set wallpaper failed");
@@ -528,6 +533,24 @@ bool Wallpaper::set(const string& str) {
 	return true;
 
 }
+*/
+
+
+bool Wallpaper::set(history_iterator it) {
+	do {
+		if (!SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, (PVOID)((string)it->get()).c_str(), 0))
+			break;
+
+		ui.menu_string(label_cur, string("current: ").append(it->get().filename()).c_str());
+		++it;
+		ui.menu_string(label_prev, string("previous: ").append(it == history.cend() ? string("(none)") : it->get().filename()).c_str());
+
+
+		return true;
+	} while (false);
+	return false;
+}
+
 
 /*
 bool Wallpaper::set(const string& str) {
@@ -583,18 +606,53 @@ bool Wallpaper::next(bool force) {
 		return false;
 	//Path old(previous);
 	//previous = current;
-	string old_title("previous: ");
-	old_title.append(ui.title());
+
+
+	//string old_title("previous: ");
+	//old_title.append(ui.title());
+
+	if (history.empty() || it_current == history.cbegin())
+		;
+	else {
+		history_iterator it(it_current);
+		--it;
+		if (set(it)) {
+			it_current = it;
+			return true;
+		}
+		return false;
+	}
+
 	const Path& p = repo.get();
 	log(p);
-	if (set(p)) {
-		ui.title(p.filename());
-		ui.menu_string(menu_cur, string("current: ").append(p.filename()).c_str());
-		ui.menu_string(menu_prev, old_title.c_str());
 
+	history.push_front(p);
+	if (set(history.cbegin())) {
+		while (history.size() > 4)
+			history.pop_back();
+		it_current = history.cbegin();
 		return true;
 	}
+	history.pop_front();
+	it_current = history.cbegin();
+
 	//previous = old;
+	return false;
+}
+
+bool Wallpaper::prev(void) {
+	if (history.size() < 2)
+		return false;
+	history_iterator it(it_current);
+	++it;
+	if (it == history.cend())
+		return false;
+
+	if (set(it)) {
+		it_current = it;
+		return true;
+	}
+
 	return false;
 }
 
