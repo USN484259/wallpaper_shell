@@ -4,6 +4,7 @@
 #include <deque>
 #include "repository.hpp"
 #include "ui.h"
+#include "performance.h"
 //#include "transparent_taskbar.hpp"
 
 class Wallpaper {
@@ -13,7 +14,7 @@ class Wallpaper {
 	HANDLE timer;
 	LONG interval;
 	mutable std::ofstream log_file;
-
+	mutable performance perf;
 
 	//HWINEVENTHOOK event_hook;
 
@@ -21,18 +22,20 @@ class Wallpaper {
 	bool power_policy;
 	bool maximize_policy;
 	bool explorer_policy;
+	bool performance_policy;
 	typedef std::deque<std::reference_wrapper<const USNLIB::filesystem::path> > history_type;
 	typedef history_type::const_iterator history_iterator;
 	history_type history;
 	history_iterator it_current;
 
-	enum : unsigned { label_total = 0x10,  label_cur = 0x12, label_prev = 0x13, menu_next = 1,menu_prev = 2, menu_paused = 4, menu_power = 5, menu_maxi = 6, menu_exp = 7 };
+	enum : unsigned { label_total = 0x10,  label_cur = 0x12, label_prev = 0x13, menu_next = 1,menu_prev = 2, menu_paused = 4, menu_power = 5, menu_maxi = 6, menu_exp = 7,menu_perf = 8 };
 
 private:
 	bool log(void) const;
 	void log(const std::string&) const;
 
 	void parse(const std::string&);
+	bool heavy_load(void) const;
 	bool changeable(void) const;
 	bool set_timer(void);
 	bool cancel_timer(void);

@@ -25,7 +25,7 @@ using Path = USNLIB::filesystem::path;
 //#define verbose_log(s)
 //#endif
 
-Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, placeholders::_1)), timer(CreateWaitableTimer(NULL, TRUE, NULL)), interval(60 * 1000), paused(false), power_policy(true), maximize_policy(true), explorer_policy(true) ,it_current(history.cbegin()){
+Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, placeholders::_1)), timer(CreateWaitableTimer(NULL, TRUE, NULL)), interval(60 * 1000), paused(false), power_policy(true), maximize_policy(true), explorer_policy(true), performance_policy(true), it_current(history.cbegin()) {
 	//CoInitialize(NULL);
 	ui.menu_item(label_total, "");
 	ui.menu_item();
@@ -35,6 +35,7 @@ Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, 
 	ui.menu_item(menu_power, "Pause on battery power");
 	ui.menu_item(menu_maxi, "Pause on maximaized");
 	ui.menu_item(menu_exp, "Pause on folder opened");
+	ui.menu_item(menu_perf, "Pause on heavy load");
 	ui.menu_item(menu_paused, "Pause manually");
 	ui.menu_item();
 	ui.menu_item(menu_prev, "Previous wallpaper");
@@ -47,6 +48,7 @@ Wallpaper::Wallpaper(const string& cmd) : ui(bind(&Wallpaper::menu_event, this, 
 	ui.menu_checked(menu_power, power_policy);
 	ui.menu_checked(menu_maxi, maximize_policy);
 	ui.menu_checked(menu_exp, explorer_policy);
+	ui.menu_checked(menu_perf, performance_policy);
 
 	stringstream ss;
 	ss << "Total " << repo.size() << " images";
@@ -221,6 +223,12 @@ void Wallpaper::parse(const string& cmd) {
 			case 'M':
 				maximize_policy = true;
 				break;
+			case 'H':
+				performance_policy = true;
+				break;
+			case 'h':
+				performance_policy = false;
+				break;
 			case 'R':
 				recursive = true;
 				break;
@@ -240,8 +248,11 @@ void Wallpaper::parse(const string& cmd) {
 				break;
 			}
 		}
-		else
+		else {
+			while (heavy_load())
+				Sleep(60 * 1000);
 			repo.put(str, recursive);
+		}
 
 		str.clear();
 
@@ -305,7 +316,10 @@ void Wallpaper::menu_event(unsigned id) {
 		ui.menu_checked(menu_exp,explorer_policy = !explorer_policy);
 		log(string("explorer_policy ").append(explorer_policy ? "true" : "false"));
 		break;
-
+	case menu_perf:	//performance
+		ui.menu_checked(menu_perf, performance_policy = !performance_policy);
+		log(string("performance_policy ").append(performance_policy ? "true" : "false"));
+		break;
 	case shell_ui::session_locked:
 		log("session_locked");
 		cancel_timer();
@@ -324,6 +338,22 @@ void Wallpaper::menu_event(unsigned id) {
 bool operator==(const RECT& a, const RECT& b) {
 	return abs(a.left - b.left) + abs(a.top - b.top) + abs(a.right - b.right) + abs(a.bottom - b.bottom) <= 32;
 }
+
+
+
+bool Wallpaper::heavy_load(void) const {
+	if (!performance_policy)
+		return false;
+
+	if (!perf.update())
+		return false;
+
+	if (perf["processor"] > 80 || perf["disk"] > 60)
+		return true;
+
+	return false;
+}
+
 
 
 struct enum_window_info {
@@ -349,6 +379,11 @@ bool Wallpaper::changeable(void) const {
 				reason << " Not AC powered";
 				break;
 			}
+		}
+
+		if (heavy_load()) {
+			reason << "heavy load";
+			break;
 		}
 
 		if (maximize_policy) {
